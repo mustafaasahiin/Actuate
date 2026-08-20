@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Actuate lint configuration.
+
+  ObsoleteSdkInt: the adaptive-icon XML (background/foreground/monochrome)
+  follows the Android Studio template layout and requires a version-qualified
+  folder even though minSdk == 26; keeping `mipmap-anydpi-v26` is intentional.
+-->
+<lint>
+    <issue id="ObsoleteSdkInt">
+        <ignore regexp="mipmap-anydpi-v26" />
+    </issue>
+</lint>

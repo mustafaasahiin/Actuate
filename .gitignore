@@ -1,0 +1,33 @@
+# Gradle
+.gradle/
+build/
+
+# Local configuration
+local.properties
+*.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & credentials
+*.keystore
+*.jks
+secrets.properties
+google-services.json
+keystore-password.txt
+
+# ECC
+.planner/
+.claude/plans/*.tmp
+
+# Build artifacts
+*.apk
+*.aab
+captures/
+output-metadata.json

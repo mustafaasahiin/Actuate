@@ -1,0 +1,21 @@
+{
+  "name": "actuate-server",
+  "version": "1.0.0",
+  "description": "Actuate voice-to-action backend: OpenAI function-calling parse, Google Calendar + Notion execution, quota and subscription state.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.6.2",
+    "google-auth-library": "^9.15.1"
+  }
+}
