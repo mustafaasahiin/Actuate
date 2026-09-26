@@ -1,6 +1,21 @@
 # Gradle
 .gradle/
 build/
+**/build/
+
+# Allow pre-compiled release APK for judges (see README.md Judge Speedrun)
+!app/build/
+app/build/*
+!app/build/outputs/
+app/build/outputs/*
+!app/build/outputs/apk/
+app/build/outputs/apk/*
+!app/build/outputs/apk/release/
+!app/build/outputs/apk/release/**
+
+# NDK / CMake
+.cxx/
+**/.cxx/
 
 # Local configuration
 local.properties
@@ -22,12 +37,31 @@ secrets.properties
 google-services.json
 keystore-password.txt
 
-# ECC
+# Node & Server
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tooling & Agents
+.omo/
+.impeccable/
 .planner/
 .claude/plans/*.tmp
 
 # Build artifacts
 *.apk
+*.ap_
 *.aab
+*.log
+**/*.log
 captures/
 output-metadata.json
+*.hprof
+
+# Whitelist release APK build outputs for judges
+!app/build/outputs/apk/release/*.apk
+!app/build/outputs/apk/release/*.idsig
+!app/build/outputs/apk/release/output-metadata.json
+!app/build/outputs/apk/release/baselineProfiles/**

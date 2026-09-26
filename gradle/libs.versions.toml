@@ -56,7 +56,8 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
 # RevenueCat (activated when a RevenueCat project is available; repo must be reachable)
 # com.revenuecat.purchases:purchases-android is served from https://repo.revenuecat.com
-revenuecat = { module = "com.revenuecat.purchases:purchases-android", version = "8.12.0" }
+revenuecat = { module = "com.revenuecat.purchases:purchases", version = "8.12.0" }
+google-play-services-auth = { module = "com.google.android.gms:play-services-auth", version = "21.3.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
