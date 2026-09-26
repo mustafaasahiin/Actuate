@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resource shrinker keep list.
+
+  `revenuecat_public_key` is read at runtime through
+  `Resources.getIdentifier("revenuecat_public_key", "string", packageName)`
+  (ActuateApplication / AppModule), so there is no static reference for the
+  shrinker to follow. Without this keep rule `isShrinkResources = true` would
+  strip the key and silently disable RevenueCat.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/revenuecat_public_key" />

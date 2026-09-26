@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="frost">#F5F5F7</color>
-    <color name="apple_blue">#0071E3</color>
+    <color name="frost">#090D16</color>
+    <color name="technical_alabaster">#F8FAFC</color>
+    <color name="cyber_background_dark">#090D16</color>
+    <color name="apple_blue">#2563EB</color>
+    <color name="electric_cobalt">#2563EB</color>
 </resources>

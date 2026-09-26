@@ -1,4 +1,189 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Actuate</string>
+    <string name="tagline">Speak. Actuate.</string>
+
+    <!-- Navigation Tabs -->
+    <string name="tab_actuate">Actuate</string>
+    <string name="tab_lists">Lists</string>
+    <string name="tab_calendar">Calendar</string>
+    <string name="tab_history">History</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Actuate Tab -->
+    <string name="voice_and_text">Voice &amp; Text</string>
+    <string name="tap_to_speak">Tap the bubble to speak</string>
+    <string name="listening_tap_to_finish">Listening… tap to finish</string>
+    <string name="thinking_and_parsing">Thinking and parsing…</string>
+    <string name="type_command_placeholder">Type a command…</string>
+    <string name="send">Send</string>
+    <string name="today">Today</string>
+
+    <!-- Quick Action Chips -->
+    <string name="quick_chip_meeting">Add meeting with Priya tomorrow at 3 PM</string>
+    <string name="quick_chip_groceries">Put milk and eggs on shopping list</string>
+    <string name="quick_chip_reminder">Remind me to stretch at 5 PM</string>
+    <string name="quick_chip_sync">Sync with core team Friday at 11 AM</string>
+
+    <!-- Calendar Tab -->
+    <string name="previous_month">Previous month</string>
+    <string name="next_month">Next month</string>
+    <string name="cancel_event_title">Cancel this event?</string>
+    <string name="cancel_send_question">Send a cancellation message to %1$s?</string>
+    <string name="cancel_send_question_multi">Send a cancellation message to %1$s (and %2$d other attendee(s))?</string>
+    <string name="cancel_attendee_fallback">your attendee</string>
+    <string name="cancel_send_button">Send &amp; Cancel</string>
+    <string name="cancel_dialog_delete">Just Cancel</string>
+    <string name="cancel_dialog_dismiss">Keep Event</string>
+    <string name="cancel_message_preview_title">Cancellation message</string>
+    <string name="cancel_message_hint">Edit the message before sending…</string>
+    <string name="cancel_message_send">Send</string>
+    <string name="cancel_message_sent">Cancellation message sent.</string>
+    <string name="cancel_message_failed">Couldn’t send cancellation message. The event was still cancelled locally.</string>
+    <string name="cancel_no_attendee_message">Remove this event?</string>
+    <string name="cancel_preview_label">Preview</string>
+    <string name="no_events_scheduled">No events scheduled</string>
+    <string name="no_events_scheduled_desc">Say or type an event to add it to this day.</string>
+    <string name="badge_calendar">Calendar</string>
+    <string name="badge_reminder">Reminder</string>
+    <string name="today_prefix">Today</string>
+    <string name="tomorrow_prefix">Tomorrow</string>
+
+    <!-- Lists Tab -->
+    <string name="sync_your_lists">Sync your lists</string>
+    <string name="sync_lists_desc">Connect to the Actuate server in Settings to keep your lists across devices.</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="loading">Loading…</string>
+    <string name="no_lists_yet">No lists yet</string>
+    <string name="no_lists_desc">Say an item to add, or tap a sample below to populate your lists:</string>
+    <string name="done">Done</string>
+    <string name="not_done">Not done</string>
+    <string name="try_action">Try</string>
+
+    <!-- Settings & Language -->
+    <string name="settings">Settings</string>
+    <string name="language">Language</string>
+    <string name="language_description">Interface display language</string>
+    <string name="language_en">English</string>
+    <string name="language_fr">Français</string>
+    <string name="language_es">Español</string>
+    <string name="language_ru">Русский</string>
+    <string name="language_tr">Türkçe</string>
+
+    <!-- Language Selection Dialog -->
+    <string name="select_language_title">Choose your language</string>
+    <string name="select_language_subtitle">Select your preferred language for the Actuate interface:</string>
+    <string name="continue_button">Continue</string>
+    <string name="skip">Skip</string>
+
+    <!-- Auth -->
+    <string name="signup_title">Sign Up</string>
+    <string name="login_title">Log In</string>
+    <string name="email_label">Email</string>
+    <string name="password_label">Password</string>
+    <string name="confirm_password_label">Confirm Password</string>
+    <string name="name_optional">Name (optional)</string>
+    <string name="create_account_button">Create Account</string>
+    <string name="login_button">Log In</string>
+    <string name="already_have_account">Already have an account?</string>
+    <string name="new_here">New here?</string>
+    <string name="account_benefit_desc">Your account gives you cross-device access and rolling quota persistence.</string>
+    <string name="email_invalid_error">Enter a valid email address</string>
+    <string name="password_criteria_error">Must be at least 8 characters with letters and numbers/symbols</string>
+    <string name="passwords_mismatch_error">Passwords do not match</string>
+
+    <!-- Settings -->
+    <string name="subscription_title">Subscription</string>
+    <string name="pro_unlimited_title">Actuate Pro · Unlimited</string>
+    <string name="pro_unlimited_desc">Unlimited cloud actions · Live Calendar &amp; Lists sync</string>
+    <string name="free_plan_title">Free Plan</string>
+    <string name="free_plan_desc">20 actions/week · Rolling 7-day quota</string>
+    <string name="upgrade_pro_title">Upgrade to Pro</string>
+    <string name="upgrade_pro_desc">$4.99/mo or $29.99/yr · Unlimited voice actions</string>
+    <string name="backend_sync_title">Backend &amp; Sync</string>
+    <string name="connection_status">Connection Status</string>
+    <string name="test_button">Test</string>
+    <string name="privacy_storage_title">Privacy &amp; Storage</string>
+    <string name="hardware_keystore_title">Hardware Keystore</string>
+    <string name="hardware_keystore_desc">Session token encrypted on-device via Android Keystore</string>
+    <string name="clear_history_title">Clear Transcript History</string>
+    <string name="clear_history_desc">Deletes all local action records</string>
+    <string name="clear_button">Clear</string>
+    <string name="reset_account_title">Sign Out / Reset Account</string>
+    <string name="reset_account_desc">Sign out of this device or switch account</string>
+    <string name="reset_button">Sign Out</string>
+    <string name="reset_dialog_title">Sign Out &amp; Reset Session?</string>
+    <string name="reset_dialog_desc">This will sign you out of this device and return to the login screen. Your history on this device will be preserved.</string>
+    <string name="clear_history_dialog_title">Clear Transcript History?</string>
+    <string name="clear_history_dialog_desc">All locally saved voice actions and transcripts will be permanently deleted.</string>
+    <string name="cancel_button">Cancel</string>
+
+    <!-- Paywall -->
+    <string name="actuate_pro_badge">Actuate Pro</string>
+    <string name="speak_without_limits_title">Speak without limits</string>
+    <string name="paywall_subtitle">Unlimited voice actions, priority sync, and advanced integrations.</string>
+    <string name="annual_plan_title">Annual</string>
+    <string name="annual_plan_subtitle">Best Value · $2.50 / month</string>
+    <string name="monthly_plan_title">Monthly</string>
+    <string name="monthly_plan_subtitle">Billed monthly · Cancel anytime</string>
+    <string name="subscribe_pro_button">Subscribe to Pro</string>
+    <string name="processing_button">Processing…</string>
+    <string name="redeem_judge_code">Have a promo or judge pass?</string>
+    <string name="judge_code_success">Judge pass unlocked! Actuate Pro is now active.</string>
+    <string name="judge_code_invalid">Invalid code. For judges, use code SHIPATON2026</string>
+    <string name="restore_purchases_button">Restore Purchases</string>
+
+    <!-- Onboarding -->
+    <string name="welcome_title">Welcome to Actuate</string>
+    <string name="welcome_subtitle">Voice-first intelligence for your day. Turn spoken commands into real calendar events, to-do lists, and reminders.</string>
+    <string name="floating_bubble_feature_title">Floating Voice Bubble</string>
+    <string name="floating_bubble_feature_desc">Tap the blue bubble or swipe open the drawer on the right edge to speak anytime from any screen.</string>
+    <string name="calendar_lists_feature_title">Calendar, Lists &amp; Reminders</string>
+    <string name="calendar_lists_feature_desc">Speak naturally to schedule events in Google Calendar, add tasks to your Lists, or set device alarms.</string>
+    <string name="private_offline_feature_title">Private &amp; Offline-Ready</string>
+    <string name="private_offline_feature_desc">No voice recordings stored. If offline, our deterministic rule parser keeps executing seamlessly.</string>
+    <string name="try_saying_header">TRY SAYING</string>
+    <string name="permissions_header">PERMISSIONS &amp; ACCESS</string>
+    <string name="microphone_permission_title">Microphone</string>
+    <string name="microphone_permission_desc">Transcribes voice commands on-device</string>
+    <string name="notifications_permission_title">Notifications</string>
+    <string name="notifications_permission_desc">Alerts you when scheduled reminders are due</string>
+    <string name="get_started_button">Get Started</string>
+    <string name="skip_button">Skip</string>
+
+    <!-- History -->
+    <string name="history_title">Execution History</string>
+    <string name="events_count_badge">%1$d events</string>
+    <string name="search_history_placeholder">Search actions history…</string>
+    <string name="filter_all">All</string>
+    <string name="filter_calendar">Calendar</string>
+    <string name="filter_lists">Lists</string>
+    <string name="filter_reminders">Reminders</string>
+    <string name="no_matching_actions">No matching actions found</string>
+    <string name="no_actions_logged">No actions logged yet</string>
+    <string name="just_now">Just now</string>
+    <string name="minutes_ago">%1$dm ago</string>
+    <string name="hours_ago">%1$dh ago</string>
+    <string name="days_ago">%1$dd ago</string>
+
+    <!-- Lists -->
+    <string name="lists_progress_metric">%1$d of %2$d completed</string>
+    <string name="lists_category_done">%1$d/%2$d done</string>
+    <string name="add_task_placeholder">Add task via voice or type here…</string>
+    <string name="strike_through_hint">Tap to complete or strike through item</string>
+
+    <!-- Status & Errors -->
+    <string name="listening_status">Listening…</string>
+    <string name="parsing_status">Parsing…</string>
+    <string name="transcribing_status">Transcribing…</string>
+    <string name="account_created_welcome">Account created — welcome to Actuate</string>
+    <string name="welcome_back">Welcome back</string>
+    <string name="speech_not_available">Speech recognition is not available on this device</string>
+    <string name="nothing_recognized">Nothing recognized</string>
+    <string name="quota_free_remaining">Free · %1$d left this week</string>
+    <string name="quota_pro_unlimited">Pro · unlimited</string>
+    <string name="quota_exhausted_error">Free tier: 20 actions per week. Upgrade for unlimited.</string>
+    <string name="something_went_wrong">Something went wrong</string>
+    <string name="auth_error_email_exists">An account with this email already exists</string>
+    <string name="auth_error_invalid_credentials">Invalid email or password</string>
 </resources>

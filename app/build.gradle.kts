@@ -13,21 +13,43 @@ android {
         applicationId = "com.actuate.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
         vectorDrawables { useSupportLibrary = true }
-        buildConfigField("String", "SERVER_BASE_URL", "\"http://35.232.148.87:8787\"")
+        buildConfigField("String", "SERVER_BASE_URL", "\"https://35.232.148.87.sslip.io:8787\"")
+        ndk {
+            abiFilters += setOf("arm64-v8a", "x86_64")
+        }
     }
 
     signingConfigs {
         create("release") {
-            val ks = rootProject.file("keystore/actuate-release.keystore")
-            val pwFile = rootProject.file("keystore/keystore-password.txt")
-            if (ks.exists() && pwFile.exists()) {
+            val ksPath = (project.findProperty("RELEASE_KEYSTORE_PATH") as? String)
+                ?: System.getenv("RELEASE_KEYSTORE_PATH")
+                ?: "keystore/actuate-release.keystore"
+            val ks = rootProject.file(ksPath)
+
+            val ksPassword = (project.findProperty("RELEASE_KEYSTORE_PASSWORD") as? String)
+                ?: System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                ?: rootProject.file("keystore/keystore-password.txt").takeIf { it.exists() }?.readText()?.trim()
+
+            val alias = (project.findProperty("RELEASE_KEY_ALIAS") as? String)
+                ?: System.getenv("RELEASE_KEY_ALIAS")
+                ?: "actuate"
+
+            val keyPasswordVal = (project.findProperty("RELEASE_KEY_PASSWORD") as? String)
+                ?: System.getenv("RELEASE_KEY_PASSWORD")
+                ?: ksPassword
+
+            if (ks.exists() && !ksPassword.isNullOrBlank()) {
                 storeFile = ks
-                storePassword = pwFile.readText().trim()
-                keyAlias = "actuate"
-                keyPassword = pwFile.readText().trim()
+                storePassword = ksPassword
+                keyAlias = alias
+                keyPassword = keyPasswordVal
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
             }
         }
     }
@@ -44,7 +66,9 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "SERVER_BASE_URL", "\"http://10.0.2.2:8787\"")
+            val localDev = project.findProperty("USE_LOCAL_SERVER") == "true"
+            val debugUrl = if (localDev) "http://10.0.2.2:8787" else "https://35.232.148.87.sslip.io:8787"
+            buildConfigField("String", "SERVER_BASE_URL", "\"$debugUrl\"")
         }
     }
 
@@ -60,6 +84,14 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+
+    lint {
+        // Zero-lint gate: the release build must not ship with errors.
+        abortOnError = true
+        checkReleaseBuilds = true
+        warningsAsErrors = false
+        checkDependencies = true
     }
 }
 
@@ -96,6 +128,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.revenuecat)
+    implementation(libs.google.play.services.auth)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 

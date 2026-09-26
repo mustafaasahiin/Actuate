@@ -9,6 +9,7 @@
          Release builds talk to the production VPS; debug builds use the
          emulator loopback / localhost. -->
     <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">35.232.148.87.sslip.io</domain>
         <domain includeSubdomains="false">35.232.148.87</domain>
     </domain-config>
     <domain-config cleartextTrafficPermitted="true">

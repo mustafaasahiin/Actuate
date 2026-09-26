@@ -4,20 +4,29 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Waveform bars centered in the safe zone -->
     <path
-        android:fillColor="#F4F8FB"
-        android:pathData="M38,46 h5 v16 h-5 z" />
+        android:strokeWidth="5.5"
+        android:strokeColor="#F4F8FB"
+        android:strokeLineCap="round"
+        android:pathData="M34.0,48.0 L34.0,60.0" />
     <path
-        android:fillColor="#F4F8FB"
-        android:pathData="M47,38 h5 v32 h-5 z" />
+        android:strokeWidth="5.5"
+        android:strokeColor="#F4F8FB"
+        android:strokeLineCap="round"
+        android:pathData="M44.0,41.0 L44.0,67.0" />
     <path
-        android:fillColor="#F4F8FB"
-        android:pathData="M56,30 h5 v48 h-5 z" />
+        android:strokeWidth="5.5"
+        android:strokeColor="#F4F8FB"
+        android:strokeLineCap="round"
+        android:pathData="M54.0,33.0 L54.0,75.0" />
     <path
-        android:fillColor="#F4F8FB"
-        android:pathData="M65,40 h5 v28 h-5 z" />
+        android:strokeWidth="5.5"
+        android:strokeColor="#F4F8FB"
+        android:strokeLineCap="round"
+        android:pathData="M64.0,41.0 L64.0,67.0" />
     <path
-        android:fillColor="#F4F8FB"
-        android:pathData="M74,50 h4 v8 h-4 z" />
+        android:strokeWidth="5.5"
+        android:strokeColor="#F4F8FB"
+        android:strokeLineCap="round"
+        android:pathData="M74.0,48.0 L74.0,60.0" />
 </vector>
