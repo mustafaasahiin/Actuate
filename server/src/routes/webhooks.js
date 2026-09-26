@@ -40,7 +40,7 @@ router.post('/revenuecat', (req, res) => {
 
   // app_user_id is the device id registered by the app (unique per install).
   const findUser = () => db.all('users').find(
-    (u) => u.email === id || u.id === id || String(u.deviceId || '').toLowerCase() === id,
+    (u) => String(u.deviceId || '').toLowerCase() === id,
   );
 
   if (isActive || isNonRenewing) {
@@ -50,12 +50,16 @@ router.post('/revenuecat', (req, res) => {
       console.log(`[webhook] ${id} upgraded to Pro`);
       return res.json({ ok: true, userId: user.id, isPro: true });
     }
+    console.warn(`[webhook] ${id} active event but no matching user by deviceId`);
+    return res.json({ ok: true, matched: false, reason: 'no_user_by_device_id' });
   } else if (event.type === 'EXPIRATION') {
     const user = findUser();
     if (user) {
       db.update('users', user.id, { isPro: false, proSource: null });
       return res.json({ ok: true, userId: user.id, isPro: false });
     }
+    console.warn(`[webhook] ${id} expiration event but no matching user by deviceId`);
+    return res.json({ ok: true, matched: false, reason: 'no_user_by_device_id' });
   }
 
   res.json({ ok: true, matched: false });

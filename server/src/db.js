@@ -45,4 +45,10 @@ export const db = {
   all(collection) {
     return Object.values(memory[collection] || {});
   },
+  remove(collection, id) {
+    if (memory[collection] && id in memory[collection]) {
+      delete memory[collection][id];
+      persist();
+    }
+  },
 };
