@@ -1,70 +1,214 @@
 package com.actuate.data.entitlement
 
+import android.app.Activity
+import android.content.Context
 import com.actuate.domain.entitlement.EntitlementProvider
+import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
+import com.revenuecat.purchases.Package
+import com.revenuecat.purchases.PurchaseParams
+import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.PurchasesConfiguration
+import com.revenuecat.purchases.PurchasesError
+import com.revenuecat.purchases.interfaces.PurchaseCallback
+import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
+import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
+import com.revenuecat.purchases.models.StoreTransaction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
-/**
- * RevenueCat adapter, prepared but dormant.
- *
- * Activation steps when a RevenueCat project exists:
- *  1. Add `maven { url = uri("https://repo.revenuecat.com") }` to
- *     dependencyResolutionManagement in settings.gradle.kts.
- *  2. Uncomment `revenuecat` in gradle/libs.versions.toml and add
- *     `implementation(libs.revenuecat)` to app/build.gradle.kts.
- *  3. Put your public SDK key in app/src/main/res/values/revenuecat.xml:
- *     <string name="revenuecat_public_key">appl_...</string>
- *  4. Set `org.gradle.project.revenuecat.enabled=true` in gradle.properties.
- *  5. In AppConfig (data module), instantiate Purchases.configure and switch
- *     the DI binding from LocalQuotaEntitlementProvider to this provider.
- *
- * The free/Pro products map to entitlements "pro_monthly" ($4.99/mo) and
- * "pro_yearly" ($29.99/yr) as configured in your RevenueCat dashboard.
- */
-class RevenueCatEntitlementProvider : EntitlementProvider {
+class RevenueCatEntitlementProvider(
+    private val appContext: Context,
+    private val fallback: LocalQuotaEntitlementProvider,
+    private val apiKeyProvider: () -> String = { "" },
+    private val appUserIdProvider: () -> String = { "" },
+) : EntitlementProvider {
 
-    private val isPro = MutableStateFlow(false)
+    private val isConfigured: Boolean
+    private val _proState = MutableStateFlow(false)
+    private val scope = CoroutineScope(Dispatchers.IO)
 
-    override val displayName: String = "RevenueCat"
+    @Volatile
+    private var _cachedOffering: Offering? = null
 
-    override fun observeIsPro(): Flow<Boolean> = isPro
+    private val prefs by lazy {
+        appContext.getSharedPreferences("actuate_revenuecat_cache", Context.MODE_PRIVATE)
+    }
 
-    override suspend fun isPro(): Boolean = isPro.value
+    fun getCachedOffering(): Offering? = _cachedOffering
 
-    /*
-    // Reference implementation (requires the purchases-android SDK):
-    class RevenueCatEntitlementProvider(
-        private val appContext: Context,
-    ) : EntitlementProvider {
-        init {
-            Purchases.configure(
-                PurchasesConfiguration.Builder(
-                    appContext,
-                    appContext.getString(R.string.revenuecat_public_key),
-                ).build(),
-            )
-        }
+    fun getCachedPrices(): Map<String, String> {
+        val annual = prefs.getString("annual_price", "$29.99 / year") ?: "$29.99 / year"
+        val monthly = prefs.getString("monthly_price", "$4.99 / month") ?: "$4.99 / month"
+        val lifetime = prefs.getString("lifetime_price", "$79.99 one-time") ?: "$79.99 one-time"
+        return mapOf(
+            "annual" to annual,
+            "monthly" to monthly,
+            "lifetime" to lifetime,
+        )
+    }
 
-        override fun observeIsPro(): Flow<Boolean> = callbackFlow {
-            val listener = CustomerInfoUpdateListener { info ->
-                trySend(isPro(info))
+    fun cacheOffering(offering: Offering) {
+        _cachedOffering = offering
+        runCatching {
+            val editor = prefs.edit()
+            offering.annual?.product?.price?.formatted?.let {
+                val formatted = if (it.contains("/")) it else "$it / year"
+                editor.putString("annual_price", formatted)
             }
-            Purchases.sharedInstance.customerInfoUpdateListener = listener
-            Purchases.sharedInstance.getCustomerInfo { info, _ ->
-                info?.let { trySend(isPro(it)) }
+            offering.monthly?.product?.price?.formatted?.let {
+                val formatted = if (it.contains("/")) it else "$it / month"
+                editor.putString("monthly_price", formatted)
             }
-            awaitClose { Purchases.sharedInstance.customerInfoUpdateListener = null }
+            offering.lifetime?.product?.price?.formatted?.let {
+                editor.putString("lifetime_price", it)
+            }
+            editor.apply()
         }
+    }
 
-        override suspend fun isPro(): Boolean =
-            suspendCancellableCoroutine { cont ->
-                Purchases.sharedInstance.getCustomerInfo { info, _ ->
-                    cont.resume(info?.let(::isPro) ?: false)
+    init {
+        val apiKey = apiKeyProvider().trim()
+        val userId = appUserIdProvider().trim()
+        if (!Purchases.isConfigured && apiKey.isNotBlank()) {
+            runCatching {
+                val builder = PurchasesConfiguration.Builder(appContext, apiKey)
+                if (userId.isNotBlank()) {
+                    builder.appUserID(userId)
+                }
+                Purchases.configure(builder.build())
+            }
+        }
+        isConfigured = Purchases.isConfigured
+        if (isConfigured) {
+            if (userId.isNotBlank()) {
+                runCatching {
+                    Purchases.sharedInstance.logIn(userId)
                 }
             }
+            runCatching {
+                Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener { customerInfo ->
+                    checkProEntitlement(customerInfo)
+                }
 
-        private fun isPro(info: CustomerInfo): Boolean =
-            info.entitlements.active.containsKey("pro")
+                Purchases.sharedInstance.getCustomerInfo(object : ReceiveCustomerInfoCallback {
+                    override fun onReceived(customerInfo: CustomerInfo) {
+                        checkProEntitlement(customerInfo)
+                    }
+
+                    override fun onError(error: PurchasesError) {
+                    }
+                })
+            }
+        }
     }
-     */
+
+    override val displayName: String = if (isConfigured && Purchases.isConfigured) "RevenueCat" else fallback.displayName
+
+    override fun observeIsPro(): Flow<Boolean> =
+        combine(_proState, fallback.observeIsPro()) { rcPro, fallbackPro ->
+            rcPro || fallbackPro
+        }
+
+    override suspend fun isPro(): Boolean {
+        if (fallback.isPro()) {
+            _proState.value = true
+            return true
+        }
+        if (!isConfigured || !Purchases.isConfigured) {
+            return false
+        }
+        return try {
+            suspendCancellableCoroutine { continuation ->
+                Purchases.sharedInstance.getCustomerInfo(object : ReceiveCustomerInfoCallback {
+                    override fun onReceived(customerInfo: CustomerInfo) {
+                        val active = checkProEntitlement(customerInfo)
+                        continuation.resume(active)
+                    }
+
+                    override fun onError(error: PurchasesError) {
+                        continuation.resume(_proState.value)
+                    }
+                })
+            }
+        } catch (e: Exception) {
+            fallback.isPro()
+        }
+    }
+
+    override suspend fun setPro(isPro: Boolean) {
+        fallback.setPro(isPro)
+        _proState.value = isPro
+    }
+
+    fun isReady(): Boolean = isConfigured && Purchases.isConfigured
+
+    fun purchasePackage(
+        activity: Activity,
+        packageToPurchase: Package,
+        onSuccess: (CustomerInfo) -> Unit,
+        onError: (PurchasesError, Boolean) -> Unit,
+    ) {
+        if (!isConfigured || !Purchases.isConfigured) {
+            onError(PurchasesError(com.revenuecat.purchases.PurchasesErrorCode.StoreProblemError, "RevenueCat is not configured"), false)
+            return
+        }
+
+        try {
+            val params = PurchaseParams.Builder(activity, packageToPurchase).build()
+            Purchases.sharedInstance.purchase(params, object : PurchaseCallback {
+                override fun onCompleted(storeTransaction: StoreTransaction, customerInfo: CustomerInfo) {
+                    val active = checkProEntitlement(customerInfo)
+                    _proState.value = active
+                    scope.launch {
+                        fallback.setPro(true)
+                    }
+                    onSuccess(customerInfo)
+                }
+
+                override fun onError(error: PurchasesError, userCancelled: Boolean) {
+                    onError(error, userCancelled)
+                }
+            })
+        } catch (e: Exception) {
+            onError(PurchasesError(com.revenuecat.purchases.PurchasesErrorCode.StoreProblemError, e.message ?: "Failed to initiate purchase"), false)
+        }
+    }
+
+    fun checkProEntitlement(info: CustomerInfo): Boolean {
+        val hasActiveNamedEntitlement = runCatching {
+            info.entitlements["pro"]?.isActive == true ||
+                info.entitlements["pro_access"]?.isActive == true ||
+                info.entitlements["pro_monthly"]?.isActive == true ||
+                info.entitlements["pro_yearly"]?.isActive == true
+        }.getOrDefault(false)
+
+        val hasExtraNamedEntitlement = runCatching {
+            info.entitlements["pro_annual"]?.isActive == true ||
+                info.entitlements["premium"]?.isActive == true
+        }.getOrDefault(false)
+
+        val hasAnyActiveEntitlement = runCatching {
+            info.entitlements.all.values.any { it.isActive }
+        }.getOrDefault(false)
+
+        val hasActiveSubscription = runCatching {
+            info.activeSubscriptions.isNotEmpty()
+        }.getOrDefault(false)
+
+        val active = hasActiveNamedEntitlement || hasExtraNamedEntitlement || hasAnyActiveEntitlement || hasActiveSubscription
+        if (active) {
+            _proState.value = true
+            scope.launch {
+                fallback.setPro(true)
+            }
+        }
+        return active
+    }
 }

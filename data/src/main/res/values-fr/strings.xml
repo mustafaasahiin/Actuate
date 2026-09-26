@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_reminders">Rappels</string>
+    <string name="notification_channel_description">Rappels vocaux d\'Actuate</string>
+    <string name="reminder_fallback_title">Rappel</string>
+</resources>

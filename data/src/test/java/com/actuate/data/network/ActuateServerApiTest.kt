@@ -1,5 +1,6 @@
 package com.actuate.data.network
 
+import com.actuate.domain.model.Attendee
 import com.actuate.domain.model.ParsedAction
 import com.actuate.domain.model.ParserSource
 import com.actuate.domain.model.ServerConfig
@@ -87,7 +88,7 @@ class ActuateServerApiTest {
 
         val calendar = parsed.actions[0] as ParsedAction.Calendar
         assertEquals("Gym", calendar.title)
-        assertEquals(listOf("Alex"), calendar.attendees)
+        assertEquals(listOf(Attendee("Alex")), calendar.attendees)
 
         val listItem = parsed.actions[1] as ParsedAction.ListItem
         assertEquals("buy chicken", listItem.text)
@@ -98,6 +99,33 @@ class ActuateServerApiTest {
 
         val recorded = server.takeRequest()
         assertTrue(recorded.getHeader("Authorization")!!.startsWith("Bearer "))
+        val recordedBody = recorded.body.readUtf8()
+        assertTrue(recordedBody.contains(""""transcript":"Schedule a gym session with Alex tomorrow at 5 PM""""))
+        assertTrue(recordedBody.contains(""""nowIso":""""))
+        assertTrue(recordedBody.contains(""""timeZone":""""))
+    }
+
+    @Test
+    fun `parse maps attendees with emails to Attendee objects`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """{"actions":[{"type":"calendar_event","title":"Meeting with Sarah","start":"2026-09-10T16:00:00Z",
+                        "attendees":["Sarah","sarah@example.com"]}],
+                        "source":"llm","confidence":1.0}""",
+                ),
+        )
+
+        val result = api.parse("Meeting with Sarah (sarah@example.com) tomorrow at 4pm")
+
+        assertTrue(result.isSuccess)
+        val parsed = result.getOrThrow()
+        val calendar = parsed.actions[0] as ParsedAction.Calendar
+        assertEquals(2, calendar.attendees.size)
+        assertEquals(Attendee("Sarah", null), calendar.attendees[0])
+        assertEquals(Attendee("sarah@example.com", "sarah@example.com"), calendar.attendees[1])
     }
 
     @Test

@@ -43,21 +43,23 @@ class QuotaRepositoryImpl(private val context: Context) : QuotaRepository {
         var consumed = false
         context.actuateDataStore.edit { prefs ->
             val raw = prefs[QUOTA_TIMESTAMPS] ?: ""
-            val stamps = parseTimestamps(raw).toMutableList()
             val now = Instant.now()
+            val windowStart = now.minusSeconds(7L * 24 * 60 * 60)
+            val stamps = parseTimestamps(raw).filter { it.isAfter(windowStart) }.toMutableList()
             if (QuotaPolicy.canConsume(stamps, now, count)) {
+                stamps.removeIf { it == now }
                 repeat(count) { stamps += now }
                 prefs[QUOTA_TIMESTAMPS] = stamps.joinToString(",") { it.toEpochMilli().toString() }
                 consumed = true
+            } else {
+                prefs[QUOTA_TIMESTAMPS] = stamps.joinToString(",") { it.toEpochMilli().toString() }
             }
         }
         return consumed
     }
 
     private fun parseTimestamps(raw: String): List<Instant> =
-        raw.split(",")
-            .mapNotNull { it.trim().toLongOrNull() }
-            .map { Instant.ofEpochMilli(it) }
+        raw?.split(",")?.mapNotNull { it.trim().toLongOrNull() }?.map { Instant.ofEpochMilli(it) } ?: emptyList()
 
     companion object {
         private val QUOTA_TIMESTAMPS = stringPreferencesKey("quota_timestamps")
@@ -85,14 +87,18 @@ class HistoryRepositoryImpl(private val context: Context) : HistoryRepository {
                 json.parseToJsonElement(raw).jsonArray
                     .map { json.decodeFromJsonElement<ActionRecordDto>(it).toDomain() }
             }.getOrDefault(emptyList())
-            val updated = (existing + record).takeLast(MAX_HISTORY)
+            val updated = (existing.filterNot { it.id == record.id } + record).takeLast(MAX_HISTORY)
             val encoded = json.encodeToJsonElement(updated.map { it.toDto() })
             prefs[HISTORY_JSON] = encoded.toString()
         }
     }
 
     override suspend fun clear() {
-        context.actuateDataStore.edit { it.remove(HISTORY_JSON) }
+        context.actuateDataStore.edit { prefs ->
+            prefs.remove(HISTORY_JSON)
+            // Also reset quota timestamps for consistency
+            prefs.remove(stringPreferencesKey("quota_timestamps"))
+        }
     }
 
     private fun ActionRecord.toDto() = ActionRecordDto(
@@ -104,6 +110,7 @@ class HistoryRepositoryImpl(private val context: Context) : HistoryRepository {
         status = status.name,
         message = message,
         destination = destination.name,
+        captureId = captureId,
     )
 
     private fun ActionRecordDto.toDomain() = ActionRecord(
@@ -115,6 +122,7 @@ class HistoryRepositoryImpl(private val context: Context) : HistoryRepository {
         status = runCatching { ActionStatus.valueOf(status) }.getOrDefault(ActionStatus.FAILED),
         message = message,
         destination = runCatching { Destination.valueOf(destination) }.getOrDefault(Destination.NONE),
+        captureId = captureId,
     )
 
     companion object {
@@ -133,4 +141,5 @@ data class ActionRecordDto(
     val status: String,
     val message: String = "",
     val destination: String = "NONE",
+    val captureId: String? = null,
 )

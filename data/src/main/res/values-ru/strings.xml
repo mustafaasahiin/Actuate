@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_reminders">Напоминания</string>
+    <string name="notification_channel_description">Голосовые напоминания от Actuate</string>
+    <string name="reminder_fallback_title">Напоминание</string>
+</resources>

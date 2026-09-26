@@ -1,6 +1,9 @@
 package com.actuate.data.settings
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.actuate.data.store.actuateDataStore
@@ -12,12 +15,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 class AppSettingsRepositoryImpl(
-    private val context: Context,
+    private val dataStore: DataStore<Preferences>,
     private val secretStore: SecretStore,
 ) : AppSettingsRepository {
 
+    constructor(context: Context, secretStore: SecretStore) : this(context.actuateDataStore, secretStore)
+
     override val serverConfig: Flow<ServerConfig> =
-        context.actuateDataStore.data.map { prefs ->
+        dataStore.data.map { prefs ->
             ServerConfig(
                 baseUrl = prefs[SERVER_BASE_URL] ?: ServerConfig.DEFAULT_BASE_URL,
                 userId = secretStore.read(KEY_SERVER_USER_ID) ?: "",
@@ -30,8 +35,19 @@ class AppSettingsRepositoryImpl(
     override suspend fun saveServerConfig(config: ServerConfig) {
         secretStore.save(KEY_SERVER_USER_ID, config.userId)
         secretStore.save(KEY_SERVER_TOKEN, config.token)
-        context.actuateDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[SERVER_BASE_URL] = config.baseUrl
+        }
+    }
+
+    override val hasSeenOnboarding: Flow<Boolean> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_HAS_SEEN_ONBOARDING] ?: false
+        }
+
+    override suspend fun setHasSeenOnboarding(hasSeen: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_HAS_SEEN_ONBOARDING] = hasSeen
         }
     }
 
@@ -39,5 +55,6 @@ class AppSettingsRepositoryImpl(
         private const val KEY_SERVER_USER_ID = "server_user_id"
         private const val KEY_SERVER_TOKEN = "server_token"
         private val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
+        private val KEY_HAS_SEEN_ONBOARDING = booleanPreferencesKey("has_seen_onboarding")
     }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_reminders">Recordatorios</string>
+    <string name="notification_channel_description">Recordatorios por voz de Actuate</string>
+    <string name="reminder_fallback_title">Recordatorio</string>
+</resources>

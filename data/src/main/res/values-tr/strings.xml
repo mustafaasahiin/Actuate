@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_reminders">Hatırlatıcılar</string>
+    <string name="notification_channel_description">Actuate sesli hatırlatıcıları</string>
+    <string name="reminder_fallback_title">Hatırlatıcı</string>
+</resources>

@@ -34,24 +34,41 @@ class LocalReminderScheduler(private val context: Context) {
 
         val triggerAt = dueAt.toEpochMilli()
         if (triggerAt <= System.currentTimeMillis()) {
+            context.sendBroadcast(intent)
             return
         }
 
-        val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            alarmManager.canScheduleExactAlarms()
-        if (exactAllowed) {
-            runCatching {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-            }.onFailure {
-                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-            }
-        } else {
-            alarmManager.setWindow(
-                AlarmManager.RTC_WAKEUP,
-                triggerAt,
-                EXACT_WINDOW_MS,
-                pendingIntent,
+        runCatching {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val showIntent = PendingIntent.getActivity(
+                context,
+                requestCode,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
+            val clockInfo = AlarmManager.AlarmClockInfo(triggerAt, showIntent)
+            alarmManager.setAlarmClock(clockInfo, pendingIntent)
+        }.onFailure {
+            val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                alarmManager.canScheduleExactAlarms()
+            if (exactAllowed) {
+                runCatching {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                }.onFailure {
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                }
+            } else {
+                runCatching {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                }.onFailure {
+                    alarmManager.setWindow(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAt,
+                        EXACT_WINDOW_MS,
+                        pendingIntent,
+                    )
+                }
+            }
         }
     }
 
