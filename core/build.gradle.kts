@@ -30,6 +30,12 @@ kotlin {
 }
 
 dependencies {
+    // Core components render domain models directly: `DestinationBadge(Destination.CALENDAR)`
+    // and the staging deck's action cards both take domain types, so :core declares the
+    // dependency as `api` rather than forcing every call site to re-import it.
+    api(project(":domain"))
+    implementation(libs.kotlinx.coroutines.core)
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
