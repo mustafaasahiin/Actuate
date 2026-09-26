@@ -1,5 +1,6 @@
 package com.actuate.domain.parser
 
+import com.actuate.domain.model.Attendee
 import com.actuate.domain.model.ParsedAction
 import com.actuate.domain.model.ParserSource
 import java.time.Instant
@@ -31,7 +32,7 @@ class RuleBasedActionParserTest {
 
         val calendar = result.actions[0] as ParsedAction.Calendar
         assertEquals("Gym Session", calendar.title)
-        assertEquals(listOf("Alex"), calendar.attendees)
+        assertEquals(listOf(Attendee("Alex")), calendar.attendees)
         assertEquals(17, LocalTime.from(calendar.start.atZone(zone)).hour)
         assertEquals(
             LocalDate.now(zone).plusDays(1),
@@ -58,7 +59,7 @@ class RuleBasedActionParserTest {
         assertEquals(listOf("milk"), listOf((result.actions[1] as ParsedAction.ListItem).text))
         assertEquals("shopping", (result.actions[1] as ParsedAction.ListItem).list)
         val lunch = result.actions[2] as ParsedAction.Calendar
-        assertEquals(listOf("mom"), lunch.attendees)
+        assertEquals(listOf(Attendee("mom")), lunch.attendees)
         assertEquals(LocalTime.of(13, 0), LocalTime.from(lunch.start.atZone(zone)))
     }
 
@@ -70,7 +71,7 @@ class RuleBasedActionParserTest {
         )
 
         val calendar = result.actions[0] as ParsedAction.Calendar
-        assertEquals(listOf("Jane"), calendar.attendees)
+        assertEquals(listOf(Attendee("Jane")), calendar.attendees)
         assertEquals("olive garden", calendar.location)
         assertEquals("Dinner", calendar.title)
     }
@@ -131,5 +132,58 @@ class RuleBasedActionParserTest {
         val item = result.actions[0] as ParsedAction.ListItem
         assertEquals("buy batteries", item.text)
         assertEquals("general", item.list)
+    }
+
+    @Test
+    fun `parses regression sentence with 30-min calendar review, multi-item shopping list, and 6 PM reminder`() = runBlocking {
+        val result = parser.parse(
+            "Tomorrow at 3 PM, schedule a 30-minute design review, add milk and eggs to my shopping list, and remind me at 6 PM to send the invoice",
+            now,
+        )
+
+        assertEquals(4, result.actions.size)
+
+        val calendar = result.actions[0] as ParsedAction.Calendar
+        assertEquals("Design Review", calendar.title)
+        val startLdt = java.time.LocalDateTime.ofInstant(calendar.start, zone)
+        assertEquals(15, startLdt.hour)
+        assertEquals(0, startLdt.minute)
+        assertEquals(1800L, calendar.end!!.epochSecond - calendar.start.epochSecond)
+
+        val item1 = result.actions[1] as ParsedAction.ListItem
+        assertEquals("milk", item1.text)
+        assertEquals("shopping", item1.list)
+
+        val item2 = result.actions[2] as ParsedAction.ListItem
+        assertEquals("eggs", item2.text)
+        assertEquals("shopping", item2.list)
+
+        val reminder = result.actions[3] as ParsedAction.Reminder
+        assertEquals("send the invoice", reminder.title)
+        val remLdt = java.time.LocalDateTime.ofInstant(reminder.dueAt!!, zone)
+        assertEquals(18, remLdt.hour)
+        assertEquals(0, remLdt.minute)
+    }
+
+    @Test
+    fun `parses create meeting with attendee and add egg to grocery list`() = runBlocking {
+        val result = parser.parse(
+            "create a meeting with yousef at 3pm tomorrow and add egg to my grocery list",
+            now,
+        )
+
+        assertEquals(2, result.actions.size)
+
+        val calendar = result.actions[0] as ParsedAction.Calendar
+        assertEquals("Meeting with yousef", calendar.title)
+        assertEquals(1, calendar.attendees.size)
+        assertEquals("yousef", calendar.attendees[0].name)
+        val startLdt = java.time.LocalDateTime.ofInstant(calendar.start, zone)
+        assertEquals(15, startLdt.hour)
+        assertEquals(0, startLdt.minute)
+
+        val item = result.actions[1] as ParsedAction.ListItem
+        assertEquals("egg", item.text)
+        assertEquals("groceries", item.list)
     }
 }

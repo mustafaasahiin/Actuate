@@ -17,5 +17,8 @@ interface SpeechTranscriber {
     ): Boolean
 
     fun stopListening()
+    /** Optional live microphone levels, in dB. Null support means no waveform is drawn. */
+    fun setAudioLevelListener(listener: (Float) -> Unit) {}
+    fun setTranscribingListener(listener: () -> Unit) {}
     fun destroy()
 }

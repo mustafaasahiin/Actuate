@@ -14,4 +14,5 @@ data class ActionRecord(
     val status: ActionStatus,
     val message: String = "",
     val destination: Destination = Destination.NONE,
+    val captureId: String? = null,
 )

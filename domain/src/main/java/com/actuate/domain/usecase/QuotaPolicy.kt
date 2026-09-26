@@ -8,7 +8,7 @@ import java.time.Instant
  */
 object QuotaPolicy {
 
-    const val WEEKLY_ALLOWANCE = 3
+    const val WEEKLY_ALLOWANCE = 20
 
     /** Timestamps of consumed actions, most recent last. */
     fun remaining(timestamps: List<Instant>, now: Instant): Int {

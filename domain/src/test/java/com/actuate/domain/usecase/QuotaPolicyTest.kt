@@ -14,7 +14,7 @@ class QuotaPolicyTest {
 
     @Test
     fun `starts with full allowance`() {
-        assertEquals(3, QuotaPolicy.remaining(emptyList(), now))
+        assertEquals(20, QuotaPolicy.remaining(emptyList(), now))
     }
 
     @Test
@@ -23,29 +23,25 @@ class QuotaPolicyTest {
             now.minusSeconds(2 * hour), // in window
             now.minusSeconds(3 * hour), // in window
         )
-        assertEquals(1, QuotaPolicy.remaining(timestamps, now))
+        assertEquals(18, QuotaPolicy.remaining(timestamps, now))
     }
 
     @Test
     fun `drops actions older than seven days`() {
         val timestamps = listOf(now.minusSeconds(weekSeconds + 1))
-        assertEquals(3, QuotaPolicy.remaining(timestamps, now))
+        assertEquals(20, QuotaPolicy.remaining(timestamps, now))
     }
 
     @Test
     fun `canConsume respects the allowance`() {
-        val timestamps = listOf(
-            now.minusSeconds(hour),
-            now.minusSeconds(2 * hour),
-            now.minusSeconds(3 * hour),
-        )
+        val timestamps = List(20) { now.minusSeconds((it + 1) * hour) }
         assertFalse(QuotaPolicy.canConsume(timestamps, now))
         assertTrue(QuotaPolicy.canConsume(timestamps, now, count = 0))
     }
 
     @Test
     fun `two actions require two remaining slots`() {
-        val timestamps = listOf(now.minusSeconds(hour), now.minusSeconds(2 * hour))
+        val timestamps = List(19) { now.minusSeconds((it + 1) * hour) }
         assertTrue(QuotaPolicy.canConsume(timestamps, now, count = 1))
         assertFalse(QuotaPolicy.canConsume(timestamps, now, count = 2))
     }
@@ -53,18 +49,18 @@ class QuotaPolicyTest {
     @Test
     fun `an action exactly seven days old is expired`() {
         val timestamps = listOf(now.minusSeconds(weekSeconds))
-        assertEquals(3, QuotaPolicy.remaining(timestamps, now))
+        assertEquals(20, QuotaPolicy.remaining(timestamps, now))
     }
 
     @Test
     fun `an action just inside the window still counts`() {
         val timestamps = listOf(now.minusSeconds(weekSeconds - 1))
-        assertEquals(2, QuotaPolicy.remaining(timestamps, now))
+        assertEquals(19, QuotaPolicy.remaining(timestamps, now))
     }
 
     @Test
     fun `never goes negative`() {
-        val timestamps = List(10) { now.minusSeconds(it * hour) }
+        val timestamps = List(25) { now.minusSeconds(it * hour) }
         assertEquals(0, QuotaPolicy.remaining(timestamps, now))
     }
 }

@@ -1,5 +1,6 @@
 package com.actuate.domain.parser
 
+import com.actuate.domain.model.Attendee
 import com.actuate.domain.model.ParsedAction
 import com.actuate.domain.model.ParsedActions
 import com.actuate.domain.model.ParserSource
@@ -24,7 +25,7 @@ class RuleBasedActionParser : ActionParser {
 
     override suspend fun parse(transcript: String, now: Instant): ParsedActions {
         val clauses = splitClauses(transcript)
-        val actions = clauses.map { parseClause(it, now) }
+        val actions = clauses.flatMap { parseClause(it, now) }
         val recognized = actions.count { it !is ParsedAction.Unknown }
         val confidence = if (actions.isEmpty()) 0f else recognized.toFloat() / actions.size
         return ParsedActions(
@@ -43,23 +44,38 @@ class RuleBasedActionParser : ActionParser {
             .replace("\u2019", "")
             .trim()
         if (normalized.isEmpty()) return emptyList()
-        val parts = SPLIT_RE.split(normalized)
-        return parts.map { it.trim() }.filter { it.isNotEmpty() }
+        val rawParts = SPLIT_RE.split(normalized).map { it.trim() }.filter { it.isNotEmpty() }
+        val merged = mutableListOf<String>()
+        var prefixBuffer = ""
+        for (part in rawParts) {
+            val c = part.lowercase(Locale.ROOT)
+            val hasVerb = isCalendarClause(c) || isListClause(c) || isReminderClause(c)
+            if (!hasVerb && merged.isEmpty() && prefixBuffer.isEmpty()) {
+                prefixBuffer = part
+            } else if (prefixBuffer.isNotEmpty()) {
+                merged.add("$prefixBuffer $part")
+                prefixBuffer = ""
+            } else {
+                merged.add(part)
+            }
+        }
+        if (prefixBuffer.isNotEmpty()) merged.add(prefixBuffer)
+        return merged
     }
 
     // region Classification
 
-    private fun parseClause(clause: String, now: Instant): ParsedAction {
+    private fun parseClause(clause: String, now: Instant): List<ParsedAction> {
         val c = clause.lowercase(Locale.ROOT)
 
-        if (isReminderClause(c)) return parseReminder(clause, now)
+        if (isReminderClause(c)) return listOf(parseReminder(clause, now))
+        if (isCalendarClause(c)) return listOf(parseCalendar(clause, now))
         if (isListClause(c)) return parseListItem(clause)
-        if (isCalendarClause(c)) return parseCalendar(clause, now)
-        return ParsedAction.Unknown(reason = "No action recognized in \"$clause\"")
+        return listOf(ParsedAction.Unknown(reason = "No action recognized in \"$clause\""))
     }
 
     private fun isCalendarClause(c: String): Boolean =
-        CALENDAR_VERBS.any { c.startsWith(it) } ||
+        CALENDAR_VERBS.any { c.contains(it) } ||
             c.contains("on my calendar") ||
             c.contains("in my calendar") ||
             CALENDAR_NOUNS.any { c.contains(it) }
@@ -68,11 +84,11 @@ class RuleBasedActionParser : ActionParser {
         LIST_VERBS.any { c.contains(it) }
 
     private fun isReminderClause(c: String): Boolean =
-        c.startsWith("remind me") ||
-            c.startsWith("set a reminder") ||
-            c.startsWith("set reminder") ||
-            c.startsWith("set me a reminder") ||
-            c.startsWith("don't let me forget")
+        c.contains("remind me") ||
+            c.contains("set a reminder") ||
+            c.contains("set reminder") ||
+            c.contains("set me a reminder") ||
+            c.contains("don't let me forget")
 
     // region Calendar parsing
 
@@ -81,11 +97,15 @@ class RuleBasedActionParser : ActionParser {
         val attendees = extractAttendees(clause)
         val location = extractLocation(clause, dateTime)
 
-        val title = extractTitle(clause)
+        var title = extractTitle(clause)
             .replaceAttendees(attendees)
             .replaceLocation(location)
             .replace(Regex("(?i)\\s+(?:on|at|for|with)\\s*$"), "")
             .trimTitle()
+
+        if (title.isBlank() || title.equals("meeting", ignoreCase = true) || title.equals("new meeting", ignoreCase = true) || title.equals("event", ignoreCase = true) || title.equals("new event", ignoreCase = true)) {
+            title = if (attendees.isNotEmpty()) "Meeting with ${attendees.joinToString(", ") { it.name }}" else (title.ifBlank { "Meeting" })
+        }
 
         val allDay = clause.contains("all day")
         val start = dateTime?.start ?: now
@@ -94,7 +114,7 @@ class RuleBasedActionParser : ActionParser {
             else -> dateTime?.end ?: start.plusSeconds(DEFAULT_DURATION_SECONDS)
         }
         return ParsedAction.Calendar(
-            title = title.ifBlank { "New event" },
+            title = title,
             start = start,
             end = end,
             allDay = allDay,
@@ -104,14 +124,15 @@ class RuleBasedActionParser : ActionParser {
     }
 
     private fun extractTitle(clause: String): String {
-        var title = clause.replaceFirst(CALENDAR_VERB_RE, "")
-        title = title.replaceFirst(Regex("(?i)\\b(me|us|a|an|the)\\b\\s*"), "")
-        TIME_EXPR_RE.findAll(title).forEach { title = title.replace(it.value, " ") }
+        var title = clause.replace(Regex("(?i)\\b\\d+(?:\\s*-\\s*|\\s+)?(?:min|minute|minutes|hour|hours)\\b"), " ")
+        title = TIME_EXPR_RE.replace(title, " ")
+        title = title.replace(Regex("(?i)\\b(?:${CALENDAR_VERBS.joinToString("|")})\\b"), " ")
+        title = title.replace(Regex("(?i)\\b(me|us|a|an|the)\\b"), " ")
         title = title.replaceFirst(Regex("(?i)\\b(and|then|plus)\\b.*$"), "")
         return title
     }
 
-    private fun String.replaceAttendees(attendees: List<String>): String {
+    private fun String.replaceAttendees(attendees: List<Attendee>): String {
         if (attendees.isEmpty()) return this
         val pattern = Regex("(?i)\\bwith\\s+.*?(?=\\s+(?:at|on|tomorrow|today|next\\s+\\w+day)|$)")
         return pattern.replace(this, " ")
@@ -133,7 +154,7 @@ class RuleBasedActionParser : ActionParser {
             .trim()
     }
 
-    private fun extractAttendees(clause: String): List<String> {
+    private fun extractAttendees(clause: String): List<Attendee> {
         val match = Regex(
             "(?i)\\bwith\\s+(.+?)(?=\\s+at\\s+(?:the\\s+)?[a-z]|\\s+at\\s+[\\d]|" +
                 "\\s+on\\s+\\w+day|\\s+tomorrow|\\s+today|\\s+next\\s+\\w+day|$)",
@@ -142,7 +163,7 @@ class RuleBasedActionParser : ActionParser {
             .split(Regex("\\s+and\\s+|\\s*,\\s*"))
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.equals("me", true) && !it.equals("i", true) }
-        return names.take(MAX_ATTENDEES)
+        return names.take(MAX_ATTENDEES).map { Attendee(name = it, email = null) }
     }
 
     private fun extractLocation(clause: String, dateTime: ExtractedDateTime?): String? {
@@ -159,25 +180,38 @@ class RuleBasedActionParser : ActionParser {
 
     // region List parsing
 
-    private fun parseListItem(clause: String): ParsedAction.ListItem {
+    private fun parseListItem(clause: String): List<ParsedAction.ListItem> {
         val listMatch = LIST_CATEGORY_RE.find(clause)
             ?: LIST_FALLBACK_RE.find(clause)
-        val list = listMatch?.groupValues?.get(1)
+        val rawList = listMatch?.groupValues?.get(1)
             ?.lowercase(Locale.ROOT)
             ?.takeIf { it.isNotBlank() && it !in LIST_STOP_WORDS }
             ?: "general"
+        val list = when (rawList) {
+            "grocery" -> "groceries"
+            else -> rawList
+        }
 
-        val text = clause
+        val rawText = clause
             .replaceFirst(Regex("(?i)^.*?(?:add|put|append|jot down)\\s+"), "")
             .replace(Regex("(?i)\\s+(?:to|on|in)\\s+(?:my|the)\\s+.*$"), "")
             .replace(Regex("(?i)\\s*(?:please|okay|ok|thanks|thank you)\\s*$"), "")
             .trim()
 
-        return ParsedAction.ListItem(
-            text = text.ifBlank { clause.trim() },
-            list = list,
-            priority = extractPriority(clause),
-        )
+        val items = if (rawText.contains(" and ") || rawText.contains(",")) {
+            rawText.split(Regex("\\s+and\\s+|,\\s*")).map { it.trim() }.filter { it.isNotBlank() }
+        } else {
+            listOf(rawText.ifBlank { clause.trim() })
+        }
+
+        val priority = extractPriority(clause)
+        return items.map { itemText ->
+            ParsedAction.ListItem(
+                text = itemText,
+                list = list,
+                priority = priority,
+            )
+        }
     }
 
     private fun extractPriority(clause: String): Priority? = when {
@@ -192,8 +226,9 @@ class RuleBasedActionParser : ActionParser {
     private fun parseReminder(clause: String, now: Instant): ParsedAction.Reminder {
         val dateTime = extractDateTime(clause, now)
         val title = clause
-            .replaceFirst(Regex("(?i)^(remind me|set (me )?a reminder|set reminder|don't let me forget)\\s+(to|that|about|for)?\\s*"), "")
-            .replaceFirst(Regex("(?i)^to\\s+"), "")
+            .replaceFirst(Regex("(?i)^.*?(?:remind me|set (?:me )?a reminder|set reminder|don't let me forget)\\s*"), "")
+            .replace(Regex("(?i)^\\s*(?:at\\s+\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?|tomorrow|today|tonight|on\\s+\\w+day)\\s*"), "")
+            .replace(Regex("(?i)^\\s*(?:to|that|about|for)\\s+"), "")
             .let { TIME_EXPR_RE.replace(it, " ") }
             .replace(Regex("(?i)\\s*(?:on|at|for)\\b\\s*$"), "")
             .replace(Regex("(?i)\\s*(please|okay|ok|thanks|thank you)\\s*$"), "")
@@ -260,6 +295,12 @@ class RuleBasedActionParser : ActionParser {
             time = time ?: LocalTime.of(20, 0)
         }
 
+        val durationMatch = Regex("(?i)\\b(\\d+)\\s*(?:-|\\s+)?(?:min|minute|minutes)\\b").find(clause)
+        val durationHoursMatch = Regex("(?i)\\b(\\d+)\\s*(?:-|\\s+)?(?:hour|hours)\\b").find(clause)
+        val customDuration = durationMatch?.groupValues?.get(1)?.toLongOrNull()?.times(60)
+            ?: durationHoursMatch?.groupValues?.get(1)?.toLongOrNull()?.times(3600)
+        val durationSeconds = customDuration ?: DEFAULT_DURATION_SECONDS
+
         // Fallback clock
         val start: Instant
         val end: Instant?
@@ -269,18 +310,18 @@ class RuleBasedActionParser : ActionParser {
                 startLdt = startLdt.plusDays(1)
             }
             start = startLdt.atZone(zone).toInstant()
-            end = if (allDay) null else start.plusSeconds(DEFAULT_DURATION_SECONDS)
+            end = if (allDay) null else start.plusSeconds(durationSeconds)
         } else if (date != today || allDay) {
             start = if (allDay) {
                 date.atStartOfDay(zone).toInstant()
             } else {
                 LocalDateTime.of(date, DEFAULT_EVENT_TIME).atZone(zone).toInstant()
             }
-            end = if (allDay) null else start.plusSeconds(DEFAULT_DURATION_SECONDS)
+            end = if (allDay) null else start.plusSeconds(durationSeconds)
         } else {
             val defaultStart = currentTime.plusHours(1)
             start = defaultStart.atZone(zone).toInstant()
-            end = start.plusSeconds(DEFAULT_DURATION_SECONDS)
+            end = start.plusSeconds(durationSeconds)
         }
 
         return ExtractedDateTime(start = start, end = end, rawText = rawSpan.trim())
@@ -291,12 +332,15 @@ class RuleBasedActionParser : ActionParser {
         val match = Regex("(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?").find(normalized) ?: return null
         val hour = match.groupValues[1].toIntOrNull() ?: return null
         val minute = match.groupValues[2].toIntOrNull() ?: 0
+        if (minute !in 0..59) return null
         val meridiem = match.groupValues[3]
         return when {
-            meridiem == "am" -> LocalTime.of(hour % 12, minute)
-            meridiem == "pm" -> LocalTime.of(hour % 12 + 12, minute)
-            hour < 8 -> LocalTime.of(hour + 12, minute)
-            else -> LocalTime.of(hour, minute)
+            meridiem == "am" && hour in 1..12 -> LocalTime.of(hour % 12, minute)
+            meridiem == "pm" && hour in 1..12 -> LocalTime.of(hour % 12 + 12, minute)
+            meridiem.isNullOrEmpty() && hour in 0..23 -> {
+                if (hour < 8) LocalTime.of(hour + 12, minute) else LocalTime.of(hour, minute)
+            }
+            else -> null
         }
     }
 
@@ -311,10 +355,13 @@ class RuleBasedActionParser : ActionParser {
     // region Constants
 
     companion object {
-        private val SPLIT_RE = Regex("\\s+(and|then|plus|also|additionally)\\s+|,\\s*|;\\s*|\\bat the same time\\b")
+        private val SPLIT_RE = Regex(
+            "(?:,\\s*(?:and\\s+|then\\s+|plus\\s+)?|;\\s*|\\s+(?:then|plus|also|additionally)\\s+|\\s+and\\s+(?=(?:schedule|book|set|add|put|remind|jot|make|plan|arrange|create)\\b))",
+            RegexOption.IGNORE_CASE,
+        )
 
         private val CALENDAR_VERBS = listOf(
-            "schedule", "book", "set up", "plan", "arrange", "make an appointment", "add to my calendar",
+            "schedule", "book", "set up", "plan", "arrange", "make an appointment", "add to my calendar", "create a", "create", "make", "set",
         )
         private val CALENDAR_VERB_RE =
             Regex("(?i)^\\s*(?:${CALENDAR_VERBS.joinToString("|")})\\s*")
@@ -342,11 +389,11 @@ class RuleBasedActionParser : ActionParser {
 
         private val DAY_SHIFT_RE = Regex("(?i)\\b(the day after tomorrow|tomorrow|tonight|today)\\b")
         private val WEEKDAY_RE = Regex("(?i)\\b(next\\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b")
-        private val TIME_RE = Regex("(?i)\\b(?:at\\s+)?(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm|a\\.m\\.|p\\.m\\.)?)\\b")
+        private val TIME_RE = Regex("(?i)\\b(?:at\\s+)?(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm|a\\.m\\.|p\\.m\\.)?)\\b(?!(?:-|\\s*)(?:min|minute|hour|sec))")
 
         // Used to strip clock/date expressions out of titles after extraction.
         private val TIME_EXPR_RE = Regex(
-            "(?i)\\b(?:at\\s+)?\\d{1,2}:?\\d{0,2}\\s*(?:am|pm|a\\.m\\.|p\\.m\\.)?\\b|" +
+            "(?i)\\b(?:at\\s+)?\\d{1,2}:?\\d{0,2}\\s*(?:am|pm|a\\.m\\.|p\\.m\\.)?\\b(?!(?:-|\\s*)(?:min|minute|hour|sec))|" +
                 "\\b(the day after tomorrow|tomorrow|tonight|today|next\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|" +
                 "(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b",
         )

@@ -16,4 +16,6 @@ data class VoiceRunResult(
     val transcript: String,
     val executed: List<ExecutionResult>,
     val remainingQuota: Int?,
+    val actions: List<ParsedAction> = emptyList(),
+    val captureId: String = java.util.UUID.randomUUID().toString(),
 )

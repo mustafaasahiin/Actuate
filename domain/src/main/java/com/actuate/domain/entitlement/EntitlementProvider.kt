@@ -13,4 +13,5 @@ interface EntitlementProvider {
     val displayName: String
     fun observeIsPro(): Flow<Boolean>
     suspend fun isPro(): Boolean
+    suspend fun setPro(isPro: Boolean) = Unit
 }
