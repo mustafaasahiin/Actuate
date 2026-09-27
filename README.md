@@ -10,6 +10,21 @@ Actuate is an offline-first Android assistant that transforms a single spoken se
 [![Offline First](https://img.shields.io/badge/Architecture-Offline--First-2563EB?style=flat-square)](#offline-resilience)
 [![Zero Marginal Speech Cost](https://img.shields.io/badge/Speech%20Cost-%240%20Marginal-10B981?style=flat-square)](#why-this-exists)
 [![R8 Minified](https://img.shields.io/badge/Release-R8%20Minified-8B5CF6?style=flat-square)](#build)
+[![Watch Demo Video](https://img.shields.io/badge/YouTube-Watch%20Demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=g-v-QCNEi2c)
+
+---
+
+## 🎬 Introduction & Demo Video
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=g-v-QCNEi2c">
+    <img src="https://img.youtube.com/vi/g-v-QCNEi2c/maxresdefault.jpg" alt="Actuate Demo Video" width="100%" style="max-width: 800px; border-radius: 12px;" />
+  </a>
+</p>
+
+<p align="center">
+  ▶️ <strong><a href="https://www.youtube.com/watch?v=g-v-QCNEi2c">Click here to watch the full Actuate Introduction & Demo on YouTube</a></strong>
+</p>
 
 ---
 
