@@ -3,6 +3,7 @@ package com.actuate.app
 import android.app.Application
 import com.actuate.app.di.appModule
 import com.actuate.app.util.PermissionState
+import com.revenuecat.purchases.LogLevel
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
 import org.koin.android.ext.koin.androidContext
@@ -19,6 +20,10 @@ class ActuateApplication : Application() {
             }
             androidContext(this@ActuateApplication)
             modules(appModule)
+        }
+
+        if (BuildConfig.DEBUG) {
+            Purchases.logLevel = LogLevel.DEBUG
         }
 
         val resKey = runCatching {

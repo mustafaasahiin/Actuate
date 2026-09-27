@@ -10,6 +10,8 @@ import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
 import com.revenuecat.purchases.PurchasesError
+import com.revenuecat.purchases.PurchasesErrorCode
+import com.revenuecat.purchases.getOfferingsWith
 import com.revenuecat.purchases.interfaces.PurchaseCallback
 import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
@@ -58,15 +60,32 @@ class RevenueCatEntitlementProvider(
         _cachedOffering = offering
         runCatching {
             val editor = prefs.edit()
-            offering.annual?.product?.price?.formatted?.let {
+            val annualPkg = offering.annual ?: offering.availablePackages.firstOrNull {
+                it.identifier == "\$rc_annual" ||
+                    it.identifier.contains("annual", ignoreCase = true) ||
+                    it.identifier.contains("year", ignoreCase = true) ||
+                    it.product.id.contains("annual", ignoreCase = true) ||
+                    it.product.id.contains("year", ignoreCase = true)
+            }
+            annualPkg?.product?.price?.formatted?.let {
                 val formatted = if (it.contains("/")) it else "$it / year"
                 editor.putString("annual_price", formatted)
             }
-            offering.monthly?.product?.price?.formatted?.let {
+            val monthlyPkg = offering.monthly ?: offering.availablePackages.firstOrNull {
+                it.identifier == "\$rc_monthly" ||
+                    it.identifier.contains("month", ignoreCase = true) ||
+                    it.product.id.contains("month", ignoreCase = true)
+            }
+            monthlyPkg?.product?.price?.formatted?.let {
                 val formatted = if (it.contains("/")) it else "$it / month"
                 editor.putString("monthly_price", formatted)
             }
-            offering.lifetime?.product?.price?.formatted?.let {
+            val lifetimePkg = offering.lifetime ?: offering.availablePackages.firstOrNull {
+                it.identifier == "\$rc_lifetime" ||
+                    it.identifier.contains("life", ignoreCase = true) ||
+                    it.product.id.contains("life", ignoreCase = true)
+            }
+            lifetimePkg?.product?.price?.formatted?.let {
                 editor.putString("lifetime_price", it)
             }
             editor.apply()
@@ -106,6 +125,57 @@ class RevenueCatEntitlementProvider(
                     }
                 })
             }
+            runCatching {
+                Purchases.sharedInstance.getOfferingsWith(
+                    onError = {},
+                    onSuccess = { offerings ->
+                        val resolved = offerings.getOffering("default")
+                            ?: offerings["default"]
+                            ?: offerings.all.entries.firstOrNull { it.key.equals("default", ignoreCase = true) }?.value
+                            ?: offerings.current
+                            ?: offerings.getOffering("pro")
+                            ?: offerings.getOffering("active")
+                            ?: offerings.all.values.firstOrNull { it.availablePackages.isNotEmpty() }
+                            ?: offerings.all.values.firstOrNull()
+                        if (resolved != null) {
+                            cacheOffering(resolved)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    fun fetchDefaultOffering(
+        onSuccess: (Offering) -> Unit,
+        onError: (PurchasesError) -> Unit = {},
+    ) {
+        if (!isConfigured || !Purchases.isConfigured) {
+            onError(PurchasesError(PurchasesErrorCode.StoreProblemError, "RevenueCat is not configured"))
+            return
+        }
+        try {
+            Purchases.sharedInstance.getOfferingsWith(
+                onError = { error -> onError(error) },
+                onSuccess = { offerings ->
+                    val resolved = offerings.getOffering("default")
+                        ?: offerings["default"]
+                        ?: offerings.all.entries.firstOrNull { it.key.equals("default", ignoreCase = true) }?.value
+                        ?: offerings.current
+                        ?: offerings.getOffering("pro")
+                        ?: offerings.getOffering("active")
+                        ?: offerings.all.values.firstOrNull { it.availablePackages.isNotEmpty() }
+                        ?: offerings.all.values.firstOrNull()
+                    if (resolved != null) {
+                        cacheOffering(resolved)
+                        onSuccess(resolved)
+                    } else {
+                        onError(PurchasesError(PurchasesErrorCode.ConfigurationError, "No default offering found in RevenueCat"))
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            onError(PurchasesError(PurchasesErrorCode.StoreProblemError, e.message ?: "Failed to fetch offerings"))
         }
     }
 

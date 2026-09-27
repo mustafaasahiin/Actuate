@@ -88,6 +88,8 @@ import com.actuate.data.entitlement.RevenueCatEntitlementProvider
 import com.actuate.domain.entitlement.EntitlementProvider
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Offering
+import com.revenuecat.purchases.Offerings
+import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesError
 import com.revenuecat.purchases.PurchasesErrorCode
@@ -104,6 +106,44 @@ enum class PaywallPlan {
 }
 
 private const val PROMO_JUDGE_PASS = "SHIPATON2026"
+
+internal fun resolveOffering(offerings: Offerings?): Offering? {
+    if (offerings == null) return null
+    return offerings.getOffering("default")
+        ?: offerings["default"]
+        ?: offerings.all.entries.firstOrNull { it.key.equals("default", ignoreCase = true) }?.value
+        ?: offerings.current
+        ?: offerings.getOffering("pro")
+        ?: offerings.getOffering("active")
+        ?: offerings.all.values.firstOrNull { it.availablePackages.isNotEmpty() }
+        ?: offerings.all.values.firstOrNull()
+}
+
+internal fun resolvePackageForPlan(offering: Offering?, plan: PaywallPlan): Package? {
+    if (offering == null) return null
+    return when (plan) {
+        PaywallPlan.MONTHLY -> offering.monthly
+            ?: offering.availablePackages.firstOrNull {
+                it.identifier == "\$rc_monthly" ||
+                    it.identifier.contains("month", ignoreCase = true) ||
+                    it.product.id.contains("month", ignoreCase = true)
+            }
+        PaywallPlan.ANNUAL -> offering.annual
+            ?: offering.availablePackages.firstOrNull {
+                it.identifier == "\$rc_annual" ||
+                    it.identifier.contains("annual", ignoreCase = true) ||
+                    it.identifier.contains("year", ignoreCase = true) ||
+                    it.product.id.contains("annual", ignoreCase = true) ||
+                    it.product.id.contains("year", ignoreCase = true)
+            }
+        PaywallPlan.LIFETIME -> offering.lifetime
+            ?: offering.availablePackages.firstOrNull {
+                it.identifier == "\$rc_lifetime" ||
+                    it.identifier.contains("life", ignoreCase = true) ||
+                    it.product.id.contains("life", ignoreCase = true)
+            }
+    } ?: offering.availablePackages.firstOrNull()
+}
 
 /**
  * Actuate Pro Upgrade Paywall.
@@ -153,6 +193,7 @@ fun PaywallSheet(
                 Purchases.sharedInstance.getOfferingsWith(
                     onError = { error ->
                         isLoadingOfferings = false
+                        android.util.Log.e("PaywallSheet", "RevenueCat getOfferings error: ${error.message} (code: ${error.code})", Exception(error.underlyingErrorMessage))
                         if (currentOffering == null) {
                             val cached = rcProvider?.getCachedOffering()
                             if (cached != null) {
@@ -169,12 +210,13 @@ fun PaywallSheet(
                     },
                     onSuccess = { offerings ->
                         isLoadingOfferings = false
-                        val resolved = offerings.current
-                            ?: offerings.getOffering("pro")
-                            ?: offerings.getOffering("active")
-                            ?: offerings.all.values.firstOrNull()
+                        val resolved = resolveOffering(offerings)
 
                         if (resolved != null && resolved.availablePackages.isNotEmpty()) {
+                            currentOffering = resolved
+                            rcProvider?.cacheOffering(resolved)
+                            offeringLoadError = null
+                        } else if (resolved != null) {
                             currentOffering = resolved
                             rcProvider?.cacheOffering(resolved)
                             offeringLoadError = null
@@ -304,15 +346,19 @@ fun PaywallSheet(
             Spacer(Modifier.height(Spacing.md))
 
             val cachedPrices = remember { rcProvider?.getCachedPrices() ?: emptyMap() }
-            val annualPrice = currentOffering?.annual?.product?.price?.formatted?.let { formatted ->
+            val annualPkg = resolvePackageForPlan(currentOffering, PaywallPlan.ANNUAL)
+            val monthlyPkg = resolvePackageForPlan(currentOffering, PaywallPlan.MONTHLY)
+            val lifetimePkg = resolvePackageForPlan(currentOffering, PaywallPlan.LIFETIME)
+
+            val annualPrice = annualPkg?.product?.price?.formatted?.let { formatted ->
                 if (formatted.contains("/")) formatted else "$formatted / year"
             } ?: cachedPrices["annual"] ?: "$29.99 / year"
 
-            val monthlyPrice = currentOffering?.monthly?.product?.price?.formatted?.let { formatted ->
+            val monthlyPrice = monthlyPkg?.product?.price?.formatted?.let { formatted ->
                 if (formatted.contains("/")) formatted else "$formatted / month"
             } ?: cachedPrices["monthly"] ?: "$4.99 / month"
 
-            val lifetimePrice = currentOffering?.lifetime?.product?.price?.formatted
+            val lifetimePrice = lifetimePkg?.product?.price?.formatted
                 ?: cachedPrices["lifetime"] ?: "$79.99 one-time"
 
             Column(
@@ -430,11 +476,7 @@ fun PaywallSheet(
                                 isSubscribing = true
                                 val activity = context as? Activity
                                 if (activity != null) {
-                                    val packageToBuy = when (selectedPlan) {
-                                        PaywallPlan.MONTHLY -> currentOffering?.monthly ?: currentOffering?.availablePackages?.firstOrNull { it.identifier == "\$rc_monthly" || it.identifier.contains("month", ignoreCase = true) }
-                                        PaywallPlan.ANNUAL -> currentOffering?.annual ?: currentOffering?.availablePackages?.firstOrNull { it.identifier == "\$rc_annual" || it.identifier.contains("year", ignoreCase = true) || it.identifier.contains("annual", ignoreCase = true) }
-                                        PaywallPlan.LIFETIME -> currentOffering?.lifetime ?: currentOffering?.availablePackages?.firstOrNull { it.identifier == "\$rc_lifetime" || it.identifier.contains("life", ignoreCase = true) }
-                                    } ?: currentOffering?.availablePackages?.firstOrNull()
+                                    val packageToBuy = resolvePackageForPlan(currentOffering, selectedPlan)
                                     if (packageToBuy != null) {
                                         rcProvider.purchasePackage(
                                             activity = activity,
@@ -456,7 +498,7 @@ fun PaywallSheet(
                                         )
                                     } else {
                                         isSubscribing = false
-                                        subscriptionError = "No subscription packages found in RevenueCat offering."
+                                        subscriptionError = "No subscription packages found in RevenueCat 'default' offering."
                                     }
                                 } else {
                                     isSubscribing = false
@@ -465,9 +507,6 @@ fun PaywallSheet(
                             } else {
                                 subscriptionError = "RevenueCat is not configured. Put your RevenueCat public key in revenuecat.xml, or enter the Judge Pass 'SHIPATON2026' below to test Pro."
                             }
-                        } else if (offeringLoadError != null) {
-                            subscriptionError = "Unable to load subscription plans. Tap Retry above or use the judge code below."
-                            retryTrigger++
                         } else if (rcProvider != null && rcProvider.isReady()) {
                             isSubscribing = true
                             val activity = context as? Activity
@@ -478,13 +517,12 @@ fun PaywallSheet(
                                         subscriptionError = "Failed to load products: ${error.message}"
                                     },
                                     onSuccess = { offerings ->
-                                        val offering = offerings.current
+                                        val offering = resolveOffering(offerings)
                                         currentOffering = offering
-                                        val packageToBuy = when (selectedPlan) {
-                                            PaywallPlan.MONTHLY -> offering?.monthly ?: offering?.availablePackages?.firstOrNull { it.identifier == "\$rc_monthly" || it.identifier.contains("month", ignoreCase = true) }
-                                            PaywallPlan.ANNUAL -> offering?.annual ?: offering?.availablePackages?.firstOrNull { it.identifier == "\$rc_annual" || it.identifier.contains("year", ignoreCase = true) || it.identifier.contains("annual", ignoreCase = true) }
-                                            PaywallPlan.LIFETIME -> offering?.lifetime ?: offering?.availablePackages?.firstOrNull { it.identifier == "\$rc_lifetime" || it.identifier.contains("life", ignoreCase = true) }
-                                        } ?: offering?.availablePackages?.firstOrNull()
+                                        if (offering != null) {
+                                            rcProvider.cacheOffering(offering)
+                                        }
+                                        val packageToBuy = resolvePackageForPlan(offering, selectedPlan)
                                         if (packageToBuy != null) {
                                             rcProvider.purchasePackage(
                                                 activity = activity,
@@ -506,7 +544,7 @@ fun PaywallSheet(
                                             )
                                         } else {
                                             isSubscribing = false
-                                            subscriptionError = "No subscription packages found in RevenueCat offering."
+                                            subscriptionError = "No subscription packages found in RevenueCat 'default' offering."
                                         }
                                     },
                                 )
