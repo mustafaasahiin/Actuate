@@ -112,6 +112,45 @@ class PaywallOfferingTest {
     }
 
     @Test
+    fun resolveOfferingFallsBackToOfferingWithPackagesIfDefaultIsEmpty() {
+        val defaultOffering = mockk<Offering>()
+        every { defaultOffering.availablePackages } returns emptyList()
+
+        val testOffering = mockk<Offering>()
+        every { testOffering.availablePackages } returns listOf(mockk())
+
+        val offerings = mockk<Offerings>()
+        every { offerings.getOffering("default") } returns defaultOffering
+        every { offerings["default"] } returns defaultOffering
+        every { offerings.all } returns mapOf("default" to defaultOffering, "test" to testOffering)
+        every { offerings.current } returns null
+        every { offerings.getOffering("test") } returns testOffering
+        every { offerings.getOffering("pro") } returns null
+        every { offerings.getOffering("active") } returns null
+
+        val resolved = resolveOffering(offerings)
+        assertEquals(testOffering, resolved)
+    }
+
+    @Test
+    fun resolveOfferingReturnsDefaultEvenIfEmptyWhenNoOtherOfferingHasPackages() {
+        val defaultOffering = mockk<Offering>()
+        every { defaultOffering.availablePackages } returns emptyList()
+
+        val offerings = mockk<Offerings>()
+        every { offerings.getOffering("default") } returns defaultOffering
+        every { offerings["default"] } returns defaultOffering
+        every { offerings.all } returns mapOf("default" to defaultOffering)
+        every { offerings.current } returns null
+        every { offerings.getOffering("test") } returns null
+        every { offerings.getOffering("pro") } returns null
+        every { offerings.getOffering("active") } returns null
+
+        val resolved = resolveOffering(offerings)
+        assertEquals(defaultOffering, resolved)
+    }
+
+    @Test
     fun resolveOfferingReturnsNullForNullInput() {
         assertNull(resolveOffering(null))
     }

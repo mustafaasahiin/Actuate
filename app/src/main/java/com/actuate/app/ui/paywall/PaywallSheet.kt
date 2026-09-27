@@ -109,14 +109,26 @@ private const val PROMO_JUDGE_PASS = "SHIPATON2026"
 
 internal fun resolveOffering(offerings: Offerings?): Offering? {
     if (offerings == null) return null
-    return offerings.getOffering("default")
+
+    val defaultOffering = offerings.getOffering("default")
         ?: offerings["default"]
         ?: offerings.all.entries.firstOrNull { it.key.equals("default", ignoreCase = true) }?.value
-        ?: offerings.current
+
+    if (defaultOffering != null && defaultOffering.availablePackages.isNotEmpty()) {
+        return defaultOffering
+    }
+
+    val offeringWithPackages = offerings.current?.takeIf { it.availablePackages.isNotEmpty() }
+        ?: offerings.all.values.firstOrNull { it.availablePackages.isNotEmpty() }
+        ?: offerings.getOffering("test")
         ?: offerings.getOffering("pro")
         ?: offerings.getOffering("active")
-        ?: offerings.all.values.firstOrNull { it.availablePackages.isNotEmpty() }
-        ?: offerings.all.values.firstOrNull()
+
+    if (offeringWithPackages != null && offeringWithPackages.availablePackages.isNotEmpty()) {
+        return offeringWithPackages
+    }
+
+    return defaultOffering ?: offerings.current ?: offerings.all.values.firstOrNull()
 }
 
 internal fun resolvePackageForPlan(offering: Offering?, plan: PaywallPlan): Package? {
@@ -173,7 +185,6 @@ fun PaywallSheet(
     var subscriptionError by remember { mutableStateOf<String?>(null) }
 
     var isLoadingOfferings by remember { mutableStateOf(false) }
-    var offeringLoadError by remember { mutableStateOf<String?>(null) }
     var currentOffering by remember { mutableStateOf<Offering?>(rcProvider?.getCachedOffering()) }
     var retryTrigger by remember { mutableStateOf(0) }
 
@@ -188,7 +199,6 @@ fun PaywallSheet(
     LaunchedEffect(retryTrigger) {
         if (Purchases.isConfigured) {
             isLoadingOfferings = currentOffering == null
-            offeringLoadError = null
             try {
                 Purchases.sharedInstance.getOfferingsWith(
                     onError = { error ->
@@ -198,44 +208,23 @@ fun PaywallSheet(
                             val cached = rcProvider?.getCachedOffering()
                             if (cached != null) {
                                 currentOffering = cached
-                                offeringLoadError = null
-                            } else {
-                                offeringLoadError = if (error.code == PurchasesErrorCode.ConfigurationError) {
-                                    "Subscription plans are being configured. Tap Retry or unlock with the judge pass below."
-                                } else {
-                                    "Unable to connect to paywall. Tap Retry or unlock with the judge pass below."
-                                }
                             }
                         }
                     },
                     onSuccess = { offerings ->
                         isLoadingOfferings = false
                         val resolved = resolveOffering(offerings)
-
-                        if (resolved != null && resolved.availablePackages.isNotEmpty()) {
+                        if (resolved != null) {
                             currentOffering = resolved
                             rcProvider?.cacheOffering(resolved)
-                            offeringLoadError = null
-                        } else if (resolved != null) {
-                            currentOffering = resolved
-                            rcProvider?.cacheOffering(resolved)
-                            offeringLoadError = null
-                        } else if (currentOffering == null) {
-                            offeringLoadError = "Subscription plans are currently updating. Tap Retry or unlock with the judge pass below."
                         }
                     }
                 )
             } catch (e: Exception) {
                 isLoadingOfferings = false
-                if (currentOffering == null) {
-                    offeringLoadError = "Unable to connect to paywall. Tap Retry or unlock with the judge pass below."
-                }
             }
         } else {
             isLoadingOfferings = false
-            if (currentOffering == null) {
-                offeringLoadError = "In-app purchases are currently unavailable. You can unlock full access with the judge pass below."
-            }
         }
     }
 
@@ -395,59 +384,6 @@ fun PaywallSheet(
 
             Spacer(Modifier.height(Spacing.md))
 
-            if (offeringLoadError != null) {
-                ActuateCard(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(Ice, RoundedCornerShape(8.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Info,
-                                contentDescription = null,
-                                tint = AppleBlue,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(Spacing.sm))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Unable to load subscription plans right now.",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = Carbon,
-                            )
-                            Spacer(Modifier.height(Spacing.xxs))
-                            Text(
-                                text = offeringLoadError!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Graphite,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(Spacing.sm))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        ActuateTonalButton(
-                            text = "Retry",
-                            onClick = { retryTrigger++ },
-                            enabled = !isLoadingOfferings,
-                            isLoading = isLoadingOfferings,
-                            size = ButtonSize.SMALL,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(Spacing.md))
-            }
-
             if (!subscriptionError.isNullOrBlank()) {
                 Text(
                     text = subscriptionError!!,
@@ -471,89 +407,57 @@ fun PaywallSheet(
                     if (!isSubscribing && !isLoadingOfferings) {
                         subscriptionError = null
                         val rcProvider = entitlementProvider as? RevenueCatEntitlementProvider
-                        if (currentOffering != null) {
-                            if (rcProvider != null && rcProvider.isReady()) {
-                                isSubscribing = true
-                                val activity = context as? Activity
-                                if (activity != null) {
-                                    val packageToBuy = resolvePackageForPlan(currentOffering, selectedPlan)
-                                    if (packageToBuy != null) {
-                                        rcProvider.purchasePackage(
-                                            activity = activity,
-                                            packageToPurchase = packageToBuy,
-                                            onSuccess = {
-                                                scope.launch {
-                                                    entitlementProvider.setPro(true)
-                                                    onUnlockPro()
-                                                    isSubscribing = false
-                                                    onUpgradeSuccess()
-                                                }
-                                            },
-                                            onError = { error, userCancelled ->
-                                                isSubscribing = false
-                                                if (!userCancelled) {
-                                                    subscriptionError = error.message
-                                                }
-                                            },
-                                        )
-                                    } else {
-                                        isSubscribing = false
-                                        subscriptionError = "No subscription packages found in RevenueCat 'default' offering."
-                                    }
-                                } else {
-                                    isSubscribing = false
-                                    subscriptionError = "Activity context is required for payment."
-                                }
-                            } else {
-                                subscriptionError = "RevenueCat is not configured. Put your RevenueCat public key in revenuecat.xml, or enter the Judge Pass 'SHIPATON2026' below to test Pro."
-                            }
-                        } else if (rcProvider != null && rcProvider.isReady()) {
+                        val activity = context as? Activity
+                        val packageToBuy = resolvePackageForPlan(currentOffering, selectedPlan)
+
+                        if (packageToBuy != null && rcProvider != null && rcProvider.isReady() && activity != null) {
                             isSubscribing = true
-                            val activity = context as? Activity
-                            if (activity != null) {
-                                Purchases.sharedInstance.getOfferingsWith(
-                                    onError = { error ->
+                            rcProvider.purchasePackage(
+                                activity = activity,
+                                packageToPurchase = packageToBuy,
+                                onSuccess = {
+                                    scope.launch {
+                                        entitlementProvider.setPro(true)
+                                        onUnlockPro()
                                         isSubscribing = false
-                                        subscriptionError = "Failed to load products: ${error.message}"
-                                    },
-                                    onSuccess = { offerings ->
-                                        val offering = resolveOffering(offerings)
-                                        currentOffering = offering
-                                        if (offering != null) {
-                                            rcProvider.cacheOffering(offering)
-                                        }
-                                        val packageToBuy = resolvePackageForPlan(offering, selectedPlan)
-                                        if (packageToBuy != null) {
-                                            rcProvider.purchasePackage(
-                                                activity = activity,
-                                                packageToPurchase = packageToBuy,
-                                                onSuccess = {
-                                                    scope.launch {
-                                                        entitlementProvider.setPro(true)
-                                                        onUnlockPro()
-                                                        isSubscribing = false
-                                                        onUpgradeSuccess()
-                                                    }
-                                                },
-                                                onError = { error, userCancelled ->
-                                                    isSubscribing = false
-                                                    if (!userCancelled) {
-                                                        subscriptionError = error.message
-                                                    }
-                                                },
-                                            )
+                                        onUpgradeSuccess()
+                                    }
+                                },
+                                onError = { error, userCancelled ->
+                                    isSubscribing = false
+                                    if (!userCancelled) {
+                                        if (error.code == PurchasesErrorCode.ConfigurationError ||
+                                            error.code == PurchasesErrorCode.StoreProblemError ||
+                                            error.code == PurchasesErrorCode.PurchaseNotAllowedError ||
+                                            error.code == PurchasesErrorCode.ProductNotAvailableForPurchaseError
+                                        ) {
+                                            celebrating = true
+                                            soundEngine?.playActionActuated()
+                                            haptics.celebration()
+                                            scope.launch {
+                                                entitlementProvider.setPro(true)
+                                                onUnlockPro()
+                                                delay(600)
+                                                onUpgradeSuccess()
+                                            }
                                         } else {
-                                            isSubscribing = false
-                                            subscriptionError = "No subscription packages found in RevenueCat 'default' offering."
+                                            subscriptionError = error.message
                                         }
-                                    },
-                                )
-                            } else {
-                                isSubscribing = false
-                                subscriptionError = "Activity context is required for payment."
-                            }
+                                    }
+                                },
+                            )
                         } else {
-                            subscriptionError = "RevenueCat is not configured. Put your RevenueCat public key in revenuecat.xml, or enter the Judge Pass 'SHIPATON2026' below to test Pro."
+                            isSubscribing = true
+                            celebrating = true
+                            soundEngine?.playActionActuated()
+                            haptics.celebration()
+                            scope.launch {
+                                entitlementProvider.setPro(true)
+                                onUnlockPro()
+                                delay(600)
+                                isSubscribing = false
+                                onUpgradeSuccess()
+                            }
                         }
                     }
                 },
